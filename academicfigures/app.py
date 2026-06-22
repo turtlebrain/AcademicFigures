@@ -1,9 +1,8 @@
 """Minimalist Tkinter UI for AcademicFigures.
 
-The window is a single vertical column of controls with a live preview on the
-right. Styling is deliberately restrained: a clean light theme, generous
-whitespace, and a single status line that turns red for errors and amber for
-warnings.
+Two-column layout: a card-style control panel on the left and a live preview
+on the right. Styling stays lightweight (pure Tk/ttk) for fast startup while
+using clear hierarchy, soft borders, and a dedicated header band.
 """
 from __future__ import annotations
 
@@ -18,15 +17,18 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 from . import csv_loader, figure_builder, presets
 
-# --- palette: light, low-distraction, high-contrast text ---------------------
-BG = "#fbfbfd"
+# --- palette: calm neutrals with one accent ----------------------------------
+BG = "#f4f4f6"
 PANEL = "#ffffff"
-INK = "#1b1b1f"
-MUTED = "#6b6b70"
+BORDER = "#e2e2e8"
+BORDER_SOFT = "#ececf0"
+INK = "#18181b"
+MUTED = "#71717a"
 ACCENT = "#2563eb"
-ERROR = "#c0392b"
-WARNING = "#b7791f"
-OK = "#1f7a4d"
+ACCENT_HOVER = "#1d4ed8"
+ERROR = "#dc2626"
+WARNING = "#b45309"
+OK = "#15803d"
 
 
 class AcademicFiguresApp:
@@ -46,8 +48,8 @@ class AcademicFiguresApp:
     def _configure_root(self) -> None:
         self.root.title("AcademicFigures")
         self.root.configure(bg=BG)
-        self.root.geometry("960x680")
-        self.root.minsize(820, 560)
+        self.root.geometry("1024x720")
+        self.root.minsize(880, 600)
 
     def _build_style(self) -> None:
         style = ttk.Style(self.root)
@@ -59,138 +61,201 @@ class AcademicFiguresApp:
         style.configure(".", background=BG, foreground=INK, font=base_font)
         style.configure("TFrame", background=BG)
         style.configure("Panel.TFrame", background=PANEL)
+        style.configure("Card.TFrame", background=PANEL, relief="flat")
         style.configure("TLabel", background=BG, foreground=INK, font=base_font)
+        style.configure("Panel.TLabel", background=PANEL, foreground=INK, font=base_font)
         style.configure("Muted.TLabel", background=BG, foreground=MUTED,
                         font=("Segoe UI", 9))
-        style.configure("Heading.TLabel", background=BG, foreground=INK,
-                        font=("Segoe UI Semibold", 15))
-        style.configure("Section.TLabel", background=BG, foreground=MUTED,
-                        font=("Segoe UI Semibold", 9))
-        style.configure("TButton", font=base_font, padding=(10, 5))
+        style.configure("PanelMuted.TLabel", background=PANEL, foreground=MUTED,
+                        font=("Segoe UI", 9))
+        style.configure("Section.TLabel", background=PANEL, foreground=MUTED,
+                        font=("Segoe UI Semibold", 8))
+        style.configure("Field.TLabel", background=PANEL, foreground=INK,
+                        font=("Segoe UI", 9))
+        style.configure("TButton", font=base_font, padding=(12, 6))
+        style.configure("Secondary.TButton", font=base_font, padding=(12, 6))
+        style.map("Secondary.TButton",
+                  background=[("!disabled", PANEL), ("active", BORDER_SOFT)],
+                  foreground=[("!disabled", INK)])
         style.configure("Accent.TButton", font=("Segoe UI Semibold", 10),
-                        padding=(12, 6))
+                        padding=(12, 7))
         style.map("Accent.TButton",
-                  background=[("!disabled", ACCENT), ("active", "#1d4ed8")],
-                  foreground=[("!disabled", "#ffffff")])
-        style.configure("TEntry", padding=4)
-        style.configure("TSpinbox", padding=4)
-        style.configure("TRadiobutton", background=BG, font=base_font)
-        style.configure("TCombobox", padding=4)
+                  background=[("!disabled", ACCENT), ("active", ACCENT_HOVER),
+                              ("disabled", BORDER_SOFT)],
+                  foreground=[("!disabled", "#ffffff"), ("disabled", MUTED)])
+        style.configure("TEntry", padding=6, fieldbackground=PANEL)
+        style.configure("TSpinbox", padding=6, fieldbackground=PANEL)
+        style.configure("TRadiobutton", background=PANEL, font=base_font)
+        style.configure("TCombobox", padding=6, fieldbackground=PANEL)
+        style.configure("Vertical.TScrollbar", background=BG, troughcolor=BG,
+                        borderwidth=0, arrowsize=12)
+
+    def _card(self, parent: tk.Misc, **grid_kw) -> tk.Frame:
+        frame = tk.Frame(
+            parent,
+            bg=PANEL,
+            highlightbackground=BORDER,
+            highlightthickness=1,
+        )
+        frame.grid(**grid_kw)
+        return frame
 
     def _build_layout(self) -> None:
-        outer = ttk.Frame(self.root, padding=16)
-        outer.pack(fill="both", expand=True)
-        outer.columnconfigure(0, weight=0, minsize=380)
-        outer.columnconfigure(1, weight=1)
-        outer.rowconfigure(1, weight=1)
-
-        header = ttk.Label(outer, text="AcademicFigures", style="Heading.TLabel")
-        header.grid(row=0, column=0, columnspan=2, sticky="w")
-        sub = ttk.Label(
-            outer,
+        header_band = tk.Frame(self.root, bg=PANEL,
+                               highlightbackground=BORDER, highlightthickness=1)
+        header_band.pack(fill="x", side="top")
+        header_inner = tk.Frame(header_band, bg=PANEL)
+        header_inner.pack(fill="x", padx=24, pady=(18, 16))
+        tk.Label(
+            header_inner,
+            text="AcademicFigures",
+            bg=PANEL,
+            fg=INK,
+            font=("Segoe UI Semibold", 22),
+        ).pack(anchor="w")
+        tk.Label(
+            header_inner,
             text="CSV to journal-standard black & white figures.",
-            style="Muted.TLabel",
+            bg=PANEL,
+            fg=MUTED,
+            font=("Segoe UI", 10),
+        ).pack(anchor="w", pady=(6, 0))
+
+        outer = ttk.Frame(self.root, padding=(20, 16, 20, 0))
+        outer.pack(fill="both", expand=True)
+        outer.columnconfigure(0, weight=0, minsize=360)
+        outer.columnconfigure(1, weight=1)
+        outer.rowconfigure(0, weight=1)
+
+        left_card = self._card(outer, row=0, column=0, sticky="nsew", padx=(0, 14))
+        left_card.rowconfigure(0, weight=1)
+        left_card.columnconfigure(0, weight=1)
+        self._build_controls(left_card)
+
+        right_card = self._card(outer, row=0, column=1, sticky="nsew")
+        right_card.rowconfigure(0, weight=1)
+        right_card.columnconfigure(0, weight=1)
+        right_inner = ttk.Frame(right_card, style="Panel.TFrame", padding=(16, 14))
+        right_inner.grid(row=0, column=0, sticky="nsew")
+        right_inner.rowconfigure(1, weight=1)
+        right_inner.columnconfigure(0, weight=1)
+        ttk.Label(right_inner, text="PREVIEW", style="Section.TLabel").grid(
+            row=0, column=0, sticky="w")
+        self.preview_holder = tk.Frame(
+            right_inner,
+            bg=BORDER_SOFT,
+            highlightbackground=BORDER,
+            highlightthickness=1,
         )
-        sub.grid(row=0, column=0, columnspan=2, sticky="w", pady=(24, 0))
-
-        # ---- left: controls (scrollable) -----------------------------------
-        left = ttk.Frame(outer)
-        left.grid(row=1, column=0, sticky="nsew", padx=(0, 16), pady=(16, 0))
-        left.rowconfigure(0, weight=1)
-        left.columnconfigure(0, weight=1)
-        self._build_controls(left)
-
-        # ---- right: preview --------------------------------------------------
-        right = ttk.Frame(outer, style="Panel.TFrame", padding=10)
-        right.grid(row=1, column=1, sticky="nsew", pady=(16, 0))
-        right.rowconfigure(1, weight=1)
-        right.columnconfigure(0, weight=1)
-        ttk.Label(right, text="PREVIEW", style="Section.TLabel",
-                  background=PANEL).grid(row=0, column=0, sticky="w")
-        self.preview_holder = tk.Frame(right, bg=PANEL,
-                                       highlightbackground="#e3e3e8",
-                                       highlightthickness=1)
-        self.preview_holder.grid(row=1, column=0, sticky="nsew", pady=(8, 0))
+        self.preview_holder.grid(row=1, column=0, sticky="nsew", pady=(10, 0))
         self.preview_holder.rowconfigure(0, weight=1)
         self.preview_holder.columnconfigure(0, weight=1)
         self.preview_placeholder = tk.Label(
             self.preview_holder,
             text="Your figure preview will appear here.",
-            bg=PANEL, fg=MUTED, font=("Segoe UI", 10),
+            bg=BORDER_SOFT,
+            fg=MUTED,
+            font=("Segoe UI", 10),
         )
         self.preview_placeholder.grid(row=0, column=0)
 
-        # ---- bottom: status bar ---------------------------------------------
-        self.status = ttk.Label(outer, text="", style="Muted.TLabel", anchor="w")
-        self.status.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(12, 0))
+        status_bar = tk.Frame(self.root, bg=PANEL,
+                              highlightbackground=BORDER, highlightthickness=1)
+        status_bar.pack(fill="x", side="bottom")
+        self.status = tk.Label(
+            status_bar,
+            text="",
+            bg=PANEL,
+            fg=MUTED,
+            font=("Segoe UI", 9),
+            anchor="w",
+            padx=24,
+            pady=10,
+        )
+        self.status.pack(fill="x")
 
-    def _build_controls(self, parent: ttk.Frame) -> None:
-        # Scrollable canvas so many lines never overflow the window.
-        canvas = tk.Canvas(parent, bg=BG, highlightthickness=0)
-        scroll = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
-        body = ttk.Frame(canvas)
-        body.bind("<Configure>",
-                  lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+    def _build_controls(self, parent: tk.Frame) -> None:
+        canvas = tk.Canvas(parent, bg=PANEL, highlightthickness=0, borderwidth=0)
+        self._controls_scroll = ttk.Scrollbar(
+            parent, orient="vertical", command=canvas.yview, style="Vertical.TScrollbar",
+        )
+        body = ttk.Frame(canvas, style="Panel.TFrame", padding=(16, 14))
+        body.bind("<Configure>", lambda e: self._sync_controls_scroll(canvas))
         window = canvas.create_window((0, 0), window=body, anchor="nw")
         canvas.bind("<Configure>",
-                    lambda e: canvas.itemconfigure(window, width=e.width))
-        canvas.configure(yscrollcommand=scroll.set)
+                    lambda e: (canvas.itemconfigure(window, width=e.width),
+                               self._sync_controls_scroll(canvas)))
+        canvas.configure(yscrollcommand=self._controls_scroll.set)
         canvas.grid(row=0, column=0, sticky="nsew")
-        scroll.grid(row=0, column=1, sticky="ns")
+        self._controls_scroll.grid(row=0, column=1, sticky="ns")
+        parent.rowconfigure(0, weight=1)
+        parent.columnconfigure(0, weight=1)
 
         def _wheel(event):
+            if canvas.winfo_height() >= body.winfo_reqheight():
+                return
             canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-        canvas.bind_all("<MouseWheel>", _wheel)
 
+        canvas.bind("<Enter>", lambda e: canvas.bind_all("<MouseWheel>", _wheel))
+        canvas.bind("<Leave>", lambda e: canvas.unbind_all("<MouseWheel>"))
+
+        self._controls_canvas = canvas
+        self._controls_body = body
         body.columnconfigure(0, weight=1)
         r = 0
 
-        # 1) CSV file
-        ttk.Label(body, text="1 · DATA FILE", style="Section.TLabel").grid(
-            row=r, column=0, sticky="w", pady=(0, 4)); r += 1
-        file_row = ttk.Frame(body)
-        file_row.grid(row=r, column=0, sticky="ew", pady=(0, 12)); r += 1
+        def section(title: str) -> None:
+            nonlocal r
+            if r:
+                sep = tk.Frame(body, bg=BORDER_SOFT, height=1)
+                sep.grid(row=r, column=0, sticky="ew", pady=(14, 12))
+                r += 1
+            ttk.Label(body, text=title, style="Section.TLabel").grid(
+                row=r, column=0, sticky="w", pady=(0, 8))
+            r += 1
+
+        section("1 · DATA FILE")
+        file_row = ttk.Frame(body, style="Panel.TFrame")
+        file_row.grid(row=r, column=0, sticky="ew", pady=(0, 0))
+        r += 1
         file_row.columnconfigure(0, weight=1)
         self.path_var = tk.StringVar()
         path_entry = ttk.Entry(file_row, textvariable=self.path_var, state="readonly")
         path_entry.grid(row=0, column=0, sticky="ew", padx=(0, 8))
-        ttk.Button(file_row, text="Browse...", command=self._on_browse).grid(
-            row=0, column=1)
+        ttk.Button(file_row, text="Browse...", style="Secondary.TButton",
+                   command=self._on_browse).grid(row=0, column=1)
 
-        # 2) Figure style
-        ttk.Label(body, text="2 · FIGURE STYLE", style="Section.TLabel").grid(
-            row=r, column=0, sticky="w", pady=(0, 4)); r += 1
+        section("2 · FIGURE STYLE")
         self.style_var = tk.StringVar(value=presets.style_names()[0])
         style_box = ttk.Combobox(body, textvariable=self.style_var,
                                  values=presets.style_names(), state="readonly")
-        style_box.grid(row=r, column=0, sticky="ew", pady=(0, 12)); r += 1
+        style_box.grid(row=r, column=0, sticky="ew")
+        r += 1
         style_box.bind("<<ComboboxSelected>>", lambda e: self._rebuild_line_rows())
 
-        # 3) Number of lines
-        ttk.Label(body, text="3 · DATA TRENDS (LINES)", style="Section.TLabel").grid(
-            row=r, column=0, sticky="w", pady=(0, 4)); r += 1
-        nlines_row = ttk.Frame(body)
-        nlines_row.grid(row=r, column=0, sticky="ew", pady=(0, 8)); r += 1
-        ttk.Label(nlines_row, text="Number of lines").grid(row=0, column=0, sticky="w")
+        section("3 · DATA TRENDS")
+        nlines_row = ttk.Frame(body, style="Panel.TFrame")
+        nlines_row.grid(row=r, column=0, sticky="ew", pady=(0, 8))
+        r += 1
+        ttk.Label(nlines_row, text="Number of lines", style="Field.TLabel").grid(
+            row=0, column=0, sticky="w")
         self.nlines_var = tk.IntVar(value=1)
         self.nlines_spin = ttk.Spinbox(
             nlines_row, from_=1, to=presets.MAX_LINES, width=5,
             textvariable=self.nlines_var, command=self._rebuild_line_rows,
             state="disabled",
         )
-        self.nlines_spin.grid(row=0, column=1, sticky="w", padx=(8, 0))
-        ttk.Label(nlines_row, text=f"(1-{presets.MAX_LINES})",
-                  style="Muted.TLabel").grid(row=0, column=2, sticky="w", padx=(8, 0))
+        self.nlines_spin.grid(row=0, column=1, sticky="w", padx=(10, 0))
+        ttk.Label(nlines_row, text=f"(1–{presets.MAX_LINES})", style="PanelMuted.TLabel").grid(
+            row=0, column=2, sticky="w", padx=(8, 0))
         self.nlines_var.trace_add("write", lambda *a: self._rebuild_line_rows())
 
-        # 4) Per-line assignment container
-        self.lines_container = ttk.Frame(body)
-        self.lines_container.grid(row=r, column=0, sticky="ew", pady=(0, 12)); r += 1
+        self.lines_container = ttk.Frame(body, style="Panel.TFrame")
+        self.lines_container.grid(row=r, column=0, sticky="ew", pady=(0, 0))
+        r += 1
         self.lines_container.columnconfigure(0, weight=1)
 
-        # 5) Labels
-        ttk.Label(body, text="4 · LABELS", style="Section.TLabel").grid(
-            row=r, column=0, sticky="w", pady=(0, 4)); r += 1
+        section("4 · LABELS")
         self.title_var = tk.StringVar()
         self.xtitle_var = tk.StringVar()
         self.ytitle_var = tk.StringVar()
@@ -199,34 +264,48 @@ class AcademicFiguresApp:
             ("X-axis title", self.xtitle_var),
             ("Y-axis title", self.ytitle_var),
         ):
-            row = ttk.Frame(body)
-            row.grid(row=r, column=0, sticky="ew", pady=(0, 6)); r += 1
+            row = ttk.Frame(body, style="Panel.TFrame")
+            row.grid(row=r, column=0, sticky="ew", pady=(0, 8))
+            r += 1
             row.columnconfigure(1, weight=1)
-            ttk.Label(row, text=label, width=14).grid(row=0, column=0, sticky="w")
+            ttk.Label(row, text=label, style="Field.TLabel", width=14).grid(
+                row=0, column=0, sticky="w")
             ttk.Entry(row, textvariable=var).grid(row=0, column=1, sticky="ew")
 
-        # 6) Output format
-        ttk.Label(body, text="5 · OUTPUT FORMAT", style="Section.TLabel").grid(
-            row=r, column=0, sticky="w", pady=(8, 4)); r += 1
-        fmt_row = ttk.Frame(body)
-        fmt_row.grid(row=r, column=0, sticky="ew", pady=(0, 12)); r += 1
+        section("5 · OUTPUT FORMAT")
+        fmt_row = ttk.Frame(body, style="Panel.TFrame")
+        fmt_row.grid(row=r, column=0, sticky="ew", pady=(0, 0))
+        r += 1
         self.fmt_var = tk.StringVar(value="png")
         ttk.Radiobutton(fmt_row, text="PNG", value="png",
-                        variable=self.fmt_var).grid(row=0, column=0, padx=(0, 16))
+                        variable=self.fmt_var).grid(row=0, column=0, padx=(0, 18))
         ttk.Radiobutton(fmt_row, text="JPEG", value="jpeg",
                         variable=self.fmt_var).grid(row=0, column=1)
 
-        # 7) Actions
-        actions = ttk.Frame(body)
-        actions.grid(row=r, column=0, sticky="ew", pady=(4, 0)); r += 1
+        actions = ttk.Frame(body, style="Panel.TFrame")
+        actions.grid(row=r, column=0, sticky="ew", pady=(18, 4))
         actions.columnconfigure(0, weight=1)
         actions.columnconfigure(1, weight=1)
-        self.preview_btn = ttk.Button(actions, text="Preview",
-                                      command=self._on_preview, state="disabled")
+        self.preview_btn = ttk.Button(
+            actions, text="Preview", style="Secondary.TButton",
+            command=self._on_preview, state="disabled",
+        )
         self.preview_btn.grid(row=0, column=0, sticky="ew", padx=(0, 6))
-        self.export_btn = ttk.Button(actions, text="Export...", style="Accent.TButton",
-                                     command=self._on_export, state="disabled")
+        self.export_btn = ttk.Button(
+            actions, text="Export...", style="Accent.TButton",
+            command=self._on_export, state="disabled",
+        )
         self.export_btn.grid(row=0, column=1, sticky="ew", padx=(6, 0))
+        self._sync_controls_scroll(canvas)
+
+    def _sync_controls_scroll(self, canvas: tk.Canvas) -> None:
+        canvas.configure(scrollregion=canvas.bbox("all"))
+        needs_scroll = canvas.winfo_height() < self._controls_body.winfo_reqheight()
+        if needs_scroll:
+            self._controls_scroll.grid()
+        else:
+            self._controls_scroll.grid_remove()
+            canvas.yview_moveto(0)
 
     # ----------------------------------------------------------- line rows UI
     def _rebuild_line_rows(self) -> None:
@@ -235,9 +314,12 @@ class AcademicFiguresApp:
         self.line_rows = []
 
         if not self.data:
-            ttk.Label(self.lines_container,
-                      text="Load a CSV to assign columns.",
-                      style="Muted.TLabel").grid(row=0, column=0, sticky="w")
+            ttk.Label(
+                self.lines_container,
+                text="Load a CSV to assign columns.",
+                style="PanelMuted.TLabel",
+            ).grid(row=0, column=0, sticky="w", pady=(0, 4))
+            self._sync_controls_scroll(self._controls_canvas)
             return
 
         try:
@@ -252,35 +334,45 @@ class AcademicFiguresApp:
         default_y = numeric[0] if numeric else headers[0]
 
         for i in range(n):
-            frame = ttk.Frame(self.lines_container, style="Panel.TFrame", padding=8)
-            frame.grid(row=i, column=0, sticky="ew", pady=(0, 6))
-            frame.columnconfigure(1, weight=1)
+            frame = tk.Frame(
+                self.lines_container,
+                bg=BORDER_SOFT,
+                highlightbackground=BORDER,
+                highlightthickness=1,
+            )
+            frame.grid(row=i, column=0, sticky="ew", pady=(0, 8))
+            frame.columnconfigure(0, weight=1)
+            inner = ttk.Frame(frame, style="Panel.TFrame", padding=(10, 8))
+            inner.grid(row=0, column=0, sticky="ew")
+            inner.columnconfigure(1, weight=1)
 
-            ttk.Label(frame, text=f"Line {i + 1}", style="Section.TLabel",
-                      background=PANEL).grid(row=0, column=0, columnspan=2, sticky="w")
+            ttk.Label(inner, text=f"Line {i + 1}", style="Section.TLabel").grid(
+                row=0, column=0, columnspan=2, sticky="w", pady=(0, 6))
 
-            ttk.Label(frame, text="X", background=PANEL, width=8).grid(
-                row=1, column=0, sticky="w", pady=(4, 0))
+            ttk.Label(inner, text="X", style="Field.TLabel", width=8).grid(
+                row=1, column=0, sticky="w", pady=(2, 0))
             x_var = tk.StringVar(value=default_x)
-            x_box = ttk.Combobox(frame, textvariable=x_var, values=headers,
+            x_box = ttk.Combobox(inner, textvariable=x_var, values=headers,
                                  state="readonly")
-            x_box.grid(row=1, column=1, sticky="ew", pady=(4, 0))
+            x_box.grid(row=1, column=1, sticky="ew", pady=(2, 0))
 
-            ttk.Label(frame, text="Y", background=PANEL, width=8).grid(
-                row=2, column=0, sticky="w", pady=(4, 0))
+            ttk.Label(inner, text="Y", style="Field.TLabel", width=8).grid(
+                row=2, column=0, sticky="w", pady=(6, 0))
             y_default = numeric[(i + 1) % len(numeric)] if len(numeric) > 1 else default_y
             y_var = tk.StringVar(value=y_default)
-            y_box = ttk.Combobox(frame, textvariable=y_var, values=headers,
+            y_box = ttk.Combobox(inner, textvariable=y_var, values=headers,
                                  state="readonly")
-            y_box.grid(row=2, column=1, sticky="ew", pady=(4, 0))
+            y_box.grid(row=2, column=1, sticky="ew", pady=(6, 0))
 
-            ttk.Label(frame, text="Legend", background=PANEL, width=8).grid(
-                row=3, column=0, sticky="w", pady=(4, 0))
+            ttk.Label(inner, text="Legend", style="Field.TLabel", width=8).grid(
+                row=3, column=0, sticky="w", pady=(6, 0))
             legend_var = tk.StringVar(value=y_default)
-            ttk.Entry(frame, textvariable=legend_var).grid(
-                row=3, column=1, sticky="ew", pady=(4, 0))
+            ttk.Entry(inner, textvariable=legend_var).grid(
+                row=3, column=1, sticky="ew", pady=(6, 0))
 
             self.line_rows.append({"x": x_var, "y": y_var, "legend": legend_var})
+
+        self._sync_controls_scroll(self._controls_canvas)
 
     # ---------------------------------------------------------------- actions
     def _on_browse(self) -> None:
@@ -363,8 +455,8 @@ class AcademicFiguresApp:
         self.canvas = FigureCanvasTkAgg(figure, master=self.preview_holder)
         self.canvas.draw()
         widget = self.canvas.get_tk_widget()
-        widget.configure(bg=PANEL)
-        widget.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
+        widget.configure(bg=BORDER_SOFT)
+        widget.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
 
     def _on_export(self) -> None:
         if self.current_figure is None:
