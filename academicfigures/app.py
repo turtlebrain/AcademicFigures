@@ -272,7 +272,38 @@ class AcademicFiguresApp:
                 row=0, column=0, sticky="w")
             ttk.Entry(row, textvariable=var).grid(row=0, column=1, sticky="ew")
 
-        section("5 · OUTPUT FORMAT")
+        section("5 · AXIS LIMITS")
+        ttk.Label(
+            body,
+            text="Leave blank to auto-fit. Ticks restyle to match.",
+            style="PanelMuted.TLabel",
+        ).grid(row=r, column=0, sticky="w", pady=(0, 8))
+        r += 1
+        self.xmin_var = tk.StringVar()
+        self.xmax_var = tk.StringVar()
+        self.ymin_var = tk.StringVar()
+        self.ymax_var = tk.StringVar()
+        for axis_label, min_var, max_var in (
+            ("X-axis", self.xmin_var, self.xmax_var),
+            ("Y-axis", self.ymin_var, self.ymax_var),
+        ):
+            row = ttk.Frame(body, style="Panel.TFrame")
+            row.grid(row=r, column=0, sticky="ew", pady=(0, 8))
+            r += 1
+            row.columnconfigure(2, weight=1)
+            row.columnconfigure(4, weight=1)
+            ttk.Label(row, text=axis_label, style="Field.TLabel", width=8).grid(
+                row=0, column=0, sticky="w")
+            ttk.Label(row, text="min", style="PanelMuted.TLabel").grid(
+                row=0, column=1, sticky="w", padx=(4, 4))
+            ttk.Entry(row, textvariable=min_var, width=8).grid(
+                row=0, column=2, sticky="ew", padx=(0, 8))
+            ttk.Label(row, text="max", style="PanelMuted.TLabel").grid(
+                row=0, column=3, sticky="w", padx=(0, 4))
+            ttk.Entry(row, textvariable=max_var, width=8).grid(
+                row=0, column=4, sticky="ew")
+
+        section("6 · OUTPUT FORMAT")
         fmt_row = ttk.Frame(body, style="Panel.TFrame")
         fmt_row.grid(row=r, column=0, sticky="ew", pady=(0, 0))
         r += 1
@@ -424,7 +455,36 @@ class AcademicFiguresApp:
             x_axis_title=self.xtitle_var.get(),
             y_axis_title=self.ytitle_var.get(),
             lines=lines,
+            x_min=self._parse_limit(self.xmin_var.get()),
+            x_max=self._parse_limit(self.xmax_var.get()),
+            y_min=self._parse_limit(self.ymin_var.get()),
+            y_max=self._parse_limit(self.ymax_var.get()),
         )
+
+    @staticmethod
+    def _parse_limit(text: str) -> float | None:
+        """Blank stays auto (None); otherwise coerce to float, tolerating commas."""
+        cleaned = text.strip().replace(",", "")
+        if not cleaned:
+            return None
+        try:
+            return float(cleaned)
+        except ValueError:
+            return None
+
+    def _invalid_limit_fields(self) -> list[str]:
+        """Names of axis-limit fields holding non-blank, non-numeric text."""
+        bad: list[str] = []
+        for name, var in (
+            ("X min", self.xmin_var),
+            ("X max", self.xmax_var),
+            ("Y min", self.ymin_var),
+            ("Y max", self.ymax_var),
+        ):
+            text = var.get().strip()
+            if text and self._parse_limit(text) is None:
+                bad.append(name)
+        return bad
 
     def _on_preview(self) -> None:
         if not self.data:
@@ -443,8 +503,14 @@ class AcademicFiguresApp:
         self._render_preview(result.figure)
         self.export_btn.configure(state="normal")
 
-        if result.warnings:
-            self._set_status("Warning: " + "  ".join(result.warnings), WARNING)
+        warnings = list(result.warnings)
+        bad = self._invalid_limit_fields()
+        if bad:
+            warnings.append(
+                f"Ignored non-numeric axis limit(s): {', '.join(bad)}."
+            )
+        if warnings:
+            self._set_status("Warning: " + "  ".join(warnings), WARNING)
         else:
             self._set_status("Preview ready. Click Export... to save.", OK)
 

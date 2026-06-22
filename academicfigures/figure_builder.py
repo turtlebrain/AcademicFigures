@@ -6,6 +6,7 @@ matplotlib Figure that the UI can both preview and export.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Optional
 
 import matplotlib
 
@@ -32,12 +33,22 @@ class LineSpec:
 
 @dataclass
 class FigureSpec:
-    """Everything needed to render a figure."""
+    """Everything needed to render a figure.
+
+    The axis-limit fields are optional. A value of ``None`` for any bound
+    leaves that side on matplotlib's data-driven autoscale, so the user can
+    constrain just one edge (e.g. force the y-axis to start at 0) without
+    pinning the rest.
+    """
 
     title: str
     x_axis_title: str
     y_axis_title: str
     lines: list[LineSpec]
+    x_min: Optional[float] = None
+    x_max: Optional[float] = None
+    y_min: Optional[float] = None
+    y_max: Optional[float] = None
 
 
 @dataclass
@@ -53,6 +64,28 @@ def _marker_every(n_points: int) -> int | None:
     if n_points <= 25:
         return None
     return max(1, n_points // 20)
+
+
+def _apply_axis_limits(ax, spec: FigureSpec, warnings: list[str]) -> None:
+    """Apply user axis limits, ignoring (with a warning) inverted ranges.
+
+    Only the bounds the user supplied are pinned; the others stay on the
+    autoscaled data extent. Limits are set *before* the tick locators run so
+    that ``MaxNLocator`` recomputes journal-standard "nice" tick positions and
+    labels for the new view interval.
+    """
+    for axis_name, lo, hi, setter in (
+        ("X", spec.x_min, spec.x_max, ax.set_xlim),
+        ("Y", spec.y_min, spec.y_max, ax.set_ylim),
+    ):
+        if lo is not None and hi is not None and lo >= hi:
+            warnings.append(
+                f"{axis_name}-axis: minimum ({lo:g}) must be less than maximum "
+                f"({hi:g}); limit ignored."
+            )
+            continue
+        if lo is not None or hi is not None:
+            setter(left=lo, right=hi) if axis_name == "X" else setter(bottom=lo, top=hi)
 
 
 def build(data: csv_loader.CsvData, spec: FigureSpec, style: FigureStyle) -> BuildResult:
@@ -119,6 +152,10 @@ def build(data: csv_loader.CsvData, spec: FigureSpec, style: FigureStyle) -> Bui
         if spec.y_axis_title.strip():
             ax.set_ylabel(spec.y_axis_title.strip())
 
+        _apply_axis_limits(ax, spec, warnings)
+
+        # Recompute ticks *after* limits so labels stay journal-standard for
+        # whatever view interval the user pinned.
         ax.xaxis.set_major_locator(MaxNLocator(nbins=style.max_x_ticks, prune=None))
         ax.yaxis.set_major_locator(MaxNLocator(nbins=style.max_y_ticks, prune=None))
         ax.tick_params(which="both", top=True, right=True)
