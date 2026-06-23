@@ -15,7 +15,7 @@ import matplotlib
 matplotlib.use("TkAgg")
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-from . import csv_loader, figure_builder, presets
+from . import csv_loader, figure_builder, mathtext, presets
 
 # --- palette: calm neutrals with one accent ----------------------------------
 BG = "#f4f4f6"
@@ -38,6 +38,17 @@ class AcademicFiguresApp:
         self.current_figure = None
         self.canvas: FigureCanvasTkAgg | None = None
         self.line_rows: list[dict] = []
+        self.mathtext = mathtext.MathTextEditor(
+            root,
+            colors={
+                "panel": PANEL,
+                "ink": INK,
+                "muted": MUTED,
+                "border": BORDER,
+                "border_soft": BORDER_SOFT,
+                "accent": ACCENT,
+            },
+        )
 
         self._configure_root()
         self._build_style()
@@ -270,7 +281,22 @@ class AcademicFiguresApp:
             row.columnconfigure(1, weight=1)
             ttk.Label(row, text=label, style="Field.TLabel", width=14).grid(
                 row=0, column=0, sticky="w")
-            ttk.Entry(row, textvariable=var).grid(row=0, column=1, sticky="ew")
+            entry = ttk.Entry(row, textvariable=var)
+            entry.grid(row=0, column=1, sticky="ew")
+            self.mathtext.track(entry)
+
+        self.mathtext.build_toolbar(body).grid(
+            row=r, column=0, sticky="ew", pady=(2, 2))
+        r += 1
+        ttk.Label(
+            body,
+            text="Click a field, then insert. Select text first to make it "
+                 "super/subscript.",
+            style="PanelMuted.TLabel",
+            wraplength=320,
+            justify="left",
+        ).grid(row=r, column=0, sticky="w", pady=(0, 4))
+        r += 1
 
         section("5 · AXIS LIMITS")
         ttk.Label(
@@ -398,8 +424,9 @@ class AcademicFiguresApp:
             ttk.Label(inner, text="Legend", style="Field.TLabel", width=8).grid(
                 row=3, column=0, sticky="w", pady=(6, 0))
             legend_var = tk.StringVar(value=y_default)
-            ttk.Entry(inner, textvariable=legend_var).grid(
-                row=3, column=1, sticky="ew", pady=(6, 0))
+            legend_entry = ttk.Entry(inner, textvariable=legend_var)
+            legend_entry.grid(row=3, column=1, sticky="ew", pady=(6, 0))
+            self.mathtext.track(legend_entry)
 
             self.line_rows.append({"x": x_var, "y": y_var, "legend": legend_var})
 
