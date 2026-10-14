@@ -40,7 +40,14 @@ BW_LINE_STYLES: tuple[LineStyle, ...] = (
     LineStyle("-.", marker="D"),  # 8: dash-dot + open diamond
 )
 
-MAX_LINES: int = len(BW_LINE_STYLES)
+# More line *series* than styles are allowed: several series may share one
+# style (e.g. discontinuous segments of the same curve), with a single legend
+# entry per style.
+MAX_LINES: int = 16
+
+# How many histogram series may be superimposed at once. Kept small: more than
+# a couple of overlapping filled distributions becomes unreadable in print.
+MAX_HISTOGRAMS: int = 4
 
 
 @dataclass(frozen=True)
@@ -74,6 +81,18 @@ class FigureStyle:
     max_y_ticks: int
     legend_frame: bool
     legend_frame_width: float
+    # Histogram bars (superimposable with lines). Grayscale keeps figures
+    # print-safe while still separating filled bars from black data lines.
+    hist_facecolor: str = "0.75"
+    hist_edgecolor: str = "black"
+    hist_edge_width: float = 0.5
+    hist_alpha: float = 1.0
+    default_bins: int = 30
+    # Legend placement + tick refinements (Elsevier-style polish).
+    legend_loc: str = "best"
+    minor_ticks: bool = False
+    tick_length_minor_frac: float = 0.6  # minor tick length = frac * major
+    tick_steps: tuple[float, ...] = (1.0, 2.0, 2.5, 5.0, 10.0)
 
     def rc_params(self) -> dict:
         """matplotlib rcParams that encode this preset."""
@@ -154,9 +173,51 @@ LINE_CHART = FigureStyle(
 )
 
 
+# Histogram + line style. Same typographic/line-art conventions as LineChart,
+# adding grayscale bars so a Monte-Carlo-style histogram and a smooth model
+# line (PDF) can be superimposed the way high-impact journals present them.
+HISTOGRAM = FigureStyle(
+    name="Histogram",
+    fig_width_in=3.5,
+    fig_height_in=2.625,  # 4:3 single column, matching LineChart
+    export_dpi=600,
+    line_width=1.2,
+    marker_size=4.0,
+    marker_edge_width=1.0,
+    marker_every=None,
+    line_styles=BW_LINE_STYLES,
+    font_family="Arial",
+    title_size=10.0,
+    axis_label_size=9.0,
+    tick_label_size=8.0,
+    legend_size=7.0,
+    axes_line_width=0.8,
+    tick_direction="in",
+    tick_length_major=3.5,
+    tick_length_minor=2.0,
+    tick_width=0.8,
+    max_x_ticks=6,
+    max_y_ticks=6,
+    legend_frame=False,  # borderless, matching the line-chart style
+    legend_frame_width=0.6,
+    hist_facecolor="0.75",
+    hist_edgecolor="black",
+    hist_edge_width=0.5,
+    hist_alpha=1.0,
+    default_bins=30,
+    # Elsevier / Computers and Geotechnics polish: compact borderless legend in
+    # the upper-right corner (as in the source figures; the peak sits centre or
+    # left-of-centre so this corner stays clear), minor ticks on all sides.
+    legend_loc="upper right",
+    minor_ticks=True,
+    tick_length_minor_frac=0.55,
+)
+
+
 # Registry so the UI can list available styles and grow later.
 FIGURE_STYLES: dict[str, FigureStyle] = {
     LINE_CHART.name: LINE_CHART,
+    HISTOGRAM.name: HISTOGRAM,
 }
 
 

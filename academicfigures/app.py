@@ -38,6 +38,7 @@ class AcademicFiguresApp:
         self.current_figure = None
         self.canvas: FigureCanvasTkAgg | None = None
         self.line_rows: list[dict] = []
+        self.hist_rows: list[dict] = []
         self.mathtext = mathtext.MathTextEditor(
             root,
             colors={
@@ -97,6 +98,9 @@ class AcademicFiguresApp:
         style.configure("TEntry", padding=6, fieldbackground=PANEL)
         style.configure("TSpinbox", padding=6, fieldbackground=PANEL)
         style.configure("TRadiobutton", background=PANEL, font=base_font)
+        style.configure("Panel.TCheckbutton", background=PANEL,
+                        font=("Segoe UI", 9))
+        style.map("Panel.TCheckbutton", background=[("active", PANEL)])
         style.configure("TCombobox", padding=6, fieldbackground=PANEL)
         style.configure("Vertical.TScrollbar", background=BG, troughcolor=BG,
                         borderwidth=0, arrowsize=12)
@@ -242,9 +246,10 @@ class AcademicFiguresApp:
                                  values=presets.style_names(), state="readonly")
         style_box.grid(row=r, column=0, sticky="ew")
         r += 1
-        style_box.bind("<<ComboboxSelected>>", lambda e: self._rebuild_line_rows())
+        style_box.bind("<<ComboboxSelected>>",
+                       lambda e: (self._rebuild_line_rows(), self._rebuild_hist_rows()))
 
-        section("3 · DATA TRENDS")
+        section("3 · LINES")
         nlines_row = ttk.Frame(body, style="Panel.TFrame")
         nlines_row.grid(row=r, column=0, sticky="ew", pady=(0, 8))
         r += 1
@@ -252,12 +257,12 @@ class AcademicFiguresApp:
             row=0, column=0, sticky="w")
         self.nlines_var = tk.IntVar(value=1)
         self.nlines_spin = ttk.Spinbox(
-            nlines_row, from_=1, to=presets.MAX_LINES, width=5,
+            nlines_row, from_=0, to=presets.MAX_LINES, width=5,
             textvariable=self.nlines_var, command=self._rebuild_line_rows,
             state="disabled",
         )
         self.nlines_spin.grid(row=0, column=1, sticky="w", padx=(10, 0))
-        ttk.Label(nlines_row, text=f"(1–{presets.MAX_LINES})", style="PanelMuted.TLabel").grid(
+        ttk.Label(nlines_row, text=f"(0–{presets.MAX_LINES})", style="PanelMuted.TLabel").grid(
             row=0, column=2, sticky="w", padx=(8, 0))
         self.nlines_var.trace_add("write", lambda *a: self._rebuild_line_rows())
 
@@ -266,7 +271,38 @@ class AcademicFiguresApp:
         r += 1
         self.lines_container.columnconfigure(0, weight=1)
 
-        section("4 · LABELS")
+        section("4 · HISTOGRAMS")
+        ttk.Label(
+            body,
+            text="Bars are drawn behind the lines, so a distribution and a "
+                 "model curve can be superimposed.",
+            style="PanelMuted.TLabel",
+            wraplength=320,
+            justify="left",
+        ).grid(row=r, column=0, sticky="w", pady=(0, 8))
+        r += 1
+        nhist_row = ttk.Frame(body, style="Panel.TFrame")
+        nhist_row.grid(row=r, column=0, sticky="ew", pady=(0, 8))
+        r += 1
+        ttk.Label(nhist_row, text="Number of histograms", style="Field.TLabel").grid(
+            row=0, column=0, sticky="w")
+        self.nhist_var = tk.IntVar(value=0)
+        self.nhist_spin = ttk.Spinbox(
+            nhist_row, from_=0, to=presets.MAX_HISTOGRAMS, width=5,
+            textvariable=self.nhist_var, command=self._rebuild_hist_rows,
+            state="disabled",
+        )
+        self.nhist_spin.grid(row=0, column=1, sticky="w", padx=(10, 0))
+        ttk.Label(nhist_row, text=f"(0–{presets.MAX_HISTOGRAMS})",
+                  style="PanelMuted.TLabel").grid(row=0, column=2, sticky="w", padx=(8, 0))
+        self.nhist_var.trace_add("write", lambda *a: self._rebuild_hist_rows())
+
+        self.hist_container = ttk.Frame(body, style="Panel.TFrame")
+        self.hist_container.grid(row=r, column=0, sticky="ew", pady=(0, 0))
+        r += 1
+        self.hist_container.columnconfigure(0, weight=1)
+
+        section("5 · LABELS")
         self.title_var = tk.StringVar()
         self.xtitle_var = tk.StringVar()
         self.ytitle_var = tk.StringVar()
@@ -298,7 +334,7 @@ class AcademicFiguresApp:
         ).grid(row=r, column=0, sticky="w", pady=(0, 4))
         r += 1
 
-        section("5 · AXIS LIMITS")
+        section("6 · AXIS LIMITS")
         ttk.Label(
             body,
             text="Leave blank to auto-fit. Ticks restyle to match.",
@@ -329,7 +365,7 @@ class AcademicFiguresApp:
             ttk.Entry(row, textvariable=max_var, width=8).grid(
                 row=0, column=4, sticky="ew")
 
-        section("6 · OUTPUT FORMAT")
+        section("7 · OUTPUT FORMAT")
         fmt_row = ttk.Frame(body, style="Panel.TFrame")
         fmt_row.grid(row=r, column=0, sticky="ew", pady=(0, 0))
         r += 1
@@ -383,7 +419,7 @@ class AcademicFiguresApp:
             n = int(self.nlines_var.get())
         except (tk.TclError, ValueError):
             return
-        n = max(1, min(presets.MAX_LINES, n))
+        n = max(0, min(presets.MAX_LINES, n))
 
         headers = self.data.headers
         numeric = self.data.numeric_headers()
@@ -428,7 +464,139 @@ class AcademicFiguresApp:
             legend_entry.grid(row=3, column=1, sticky="ew", pady=(6, 0))
             self.mathtext.track(legend_entry)
 
-            self.line_rows.append({"x": x_var, "y": y_var, "legend": legend_var})
+            ttk.Label(inner, text="Style", style="Field.TLabel", width=8).grid(
+                row=4, column=0, sticky="w", pady=(6, 0))
+            style_choices = ["Auto"] + [
+                f"{j + 1}: {self._line_style_label(ls)}"
+                for j, ls in enumerate(self._current_line_styles())
+            ]
+            style_var = tk.StringVar(value="Auto")
+            style_box = ttk.Combobox(
+                inner, textvariable=style_var, values=style_choices, state="readonly"
+            )
+            style_box.grid(row=4, column=1, sticky="ew", pady=(6, 0))
+
+            self.line_rows.append({
+                "x": x_var,
+                "y": y_var,
+                "legend": legend_var,
+                "style": style_var,
+            })
+
+        self._sync_controls_scroll(self._controls_canvas)
+
+    def _rebuild_hist_rows(self) -> None:
+        for child in self.hist_container.winfo_children():
+            child.destroy()
+        self.hist_rows = []
+
+        if not self.data:
+            self._sync_controls_scroll(self._controls_canvas)
+            return
+
+        try:
+            n = int(self.nhist_var.get())
+        except (tk.TclError, ValueError):
+            return
+        n = max(0, min(presets.MAX_HISTOGRAMS, n))
+
+        headers = self.data.headers
+        numeric = self.data.numeric_headers()
+        default_col = numeric[0] if numeric else headers[0]
+
+        for i in range(n):
+            frame = tk.Frame(
+                self.hist_container,
+                bg=BORDER_SOFT,
+                highlightbackground=BORDER,
+                highlightthickness=1,
+            )
+            frame.grid(row=i, column=0, sticky="ew", pady=(0, 8))
+            frame.columnconfigure(0, weight=1)
+            inner = ttk.Frame(frame, style="Panel.TFrame", padding=(10, 8))
+            inner.grid(row=0, column=0, sticky="ew")
+            inner.columnconfigure(1, weight=1)
+
+            ttk.Label(inner, text=f"Histogram {i + 1}", style="Section.TLabel").grid(
+                row=0, column=0, columnspan=2, sticky="w", pady=(0, 6))
+
+            ttk.Label(inner, text="Type", style="Field.TLabel", width=8).grid(
+                row=1, column=0, sticky="w", pady=(2, 0))
+            type_var = tk.StringVar(value="Raw values")
+            type_box = ttk.Combobox(
+                inner, textvariable=type_var, state="readonly",
+                values=["Raw values", "Binned (centre+height)"],
+            )
+            type_box.grid(row=1, column=1, sticky="ew", pady=(2, 0))
+
+            ttk.Label(inner, text="Legend", style="Field.TLabel", width=8).grid(
+                row=2, column=0, sticky="w", pady=(6, 0))
+            legend_var = tk.StringVar(value=default_col)
+            legend_entry = ttk.Entry(inner, textvariable=legend_var)
+            legend_entry.grid(row=2, column=1, sticky="ew", pady=(6, 0))
+            self.mathtext.track(legend_entry)
+
+            # --- Raw-values widgets (rows 3-5) ---
+            lbl_data = ttk.Label(inner, text="Data", style="Field.TLabel", width=8)
+            values_var = tk.StringVar(value=default_col)
+            values_box = ttk.Combobox(inner, textvariable=values_var,
+                                      values=headers, state="readonly")
+            lbl_bins = ttk.Label(inner, text="Bins", style="Field.TLabel", width=8)
+            bins_var = tk.IntVar(value=presets.get_style(self.style_var.get()).default_bins)
+            bins_spin = ttk.Spinbox(inner, from_=1, to=500, width=6,
+                                    textvariable=bins_var)
+            density_var = tk.BooleanVar(value=True)
+            density_chk = ttk.Checkbutton(
+                inner, text="Normalise to density (PDF)",
+                variable=density_var, style="Panel.TCheckbutton",
+            )
+
+            # --- Binned widgets (rows 3-4) ---
+            lbl_centres = ttk.Label(inner, text="Centres", style="Field.TLabel", width=8)
+            centers_var = tk.StringVar(value=default_col)
+            centers_box = ttk.Combobox(inner, textvariable=centers_var,
+                                       values=headers, state="readonly")
+            lbl_heights = ttk.Label(inner, text="Heights", style="Field.TLabel", width=8)
+            heights_var = tk.StringVar(
+                value=numeric[1] if len(numeric) > 1 else default_col)
+            heights_box = ttk.Combobox(inner, textvariable=heights_var,
+                                       values=headers, state="readonly")
+
+            raw_widgets = (
+                (lbl_data, 3, 0), (values_box, 3, 1),
+                (lbl_bins, 4, 0), (bins_spin, 4, 1),
+                (density_chk, 5, 1),
+            )
+            binned_widgets = (
+                (lbl_centres, 3, 0), (centers_box, 3, 1),
+                (lbl_heights, 4, 0), (heights_box, 4, 1),
+            )
+
+            def apply_type(*_a, type_var=type_var, raw_widgets=raw_widgets,
+                           binned_widgets=binned_widgets):
+                show_raw = type_var.get().startswith("Raw")
+                active = raw_widgets if show_raw else binned_widgets
+                inactive = binned_widgets if show_raw else raw_widgets
+                for widget, _row, _col in inactive:
+                    widget.grid_remove()
+                for widget, row_i, col_i in active:
+                    sticky = "w" if widget is density_chk else "ew"
+                    pady = (6, 0)
+                    widget.grid(row=row_i, column=col_i, sticky=sticky, pady=pady)
+                self._sync_controls_scroll(self._controls_canvas)
+
+            type_box.bind("<<ComboboxSelected>>", apply_type)
+            apply_type()
+
+            self.hist_rows.append({
+                "type": type_var,
+                "legend": legend_var,
+                "values": values_var,
+                "bins": bins_var,
+                "density": density_var,
+                "centers": centers_var,
+                "heights": heights_var,
+            })
 
         self._sync_controls_scroll(self._controls_canvas)
 
@@ -449,17 +617,21 @@ class AcademicFiguresApp:
         except csv_loader.CsvError as exc:
             self.data = None
             self.nlines_spin.configure(state="disabled")
+            self.nhist_spin.configure(state="disabled")
             self.preview_btn.configure(state="disabled")
             self.export_btn.configure(state="disabled")
             self._rebuild_line_rows()
+            self._rebuild_hist_rows()
             self._set_status(f"Error: {exc}", ERROR)
             return
 
         self.data = data
         self.nlines_spin.configure(state="normal")
+        self.nhist_spin.configure(state="normal")
         self.preview_btn.configure(state="normal")
         self.export_btn.configure(state="disabled")  # require a preview first
         self._rebuild_line_rows()
+        self._rebuild_hist_rows()
 
         msg = (f"Loaded {len(data.headers)} columns, {data.n_rows} rows. "
                f"Numeric columns: {len(data.numeric_headers())}.")
@@ -468,24 +640,82 @@ class AcademicFiguresApp:
         else:
             self._set_status(msg, OK)
 
+    def _current_line_styles(self) -> tuple:
+        """Line-style palette for the currently selected figure style."""
+        try:
+            return presets.get_style(self.style_var.get()).line_styles
+        except Exception:
+            return presets.BW_LINE_STYLES
+
+    @staticmethod
+    def _line_style_label(ls) -> str:
+        """Short human-readable name for a palette entry (UI combobox)."""
+        dash = {
+            "-": "solid",
+            "--": "dashed",
+            ":": "dotted",
+            "-.": "dash-dot",
+        }.get(ls.linestyle, ls.linestyle)
+        if ls.marker:
+            return f"{dash} + {ls.marker}"
+        return dash
+
+    @staticmethod
+    def _parse_style_index(value: str) -> int | None:
+        """Map a Style combobox value to a 0-based palette index, or None=Auto."""
+        text = (value or "").strip()
+        if not text or text == "Auto":
+            return None
+        # Values look like "3: dotted" — take the leading integer.
+        head = text.split(":", 1)[0].strip()
+        try:
+            n = int(head)
+        except ValueError:
+            return None
+        return max(0, n - 1)
+
     def _collect_spec(self) -> figure_builder.FigureSpec:
         lines = [
             figure_builder.LineSpec(
                 x_header=row["x"].get(),
                 y_header=row["y"].get(),
                 legend=row["legend"].get(),
+                style_index=self._parse_style_index(row["style"].get()),
             )
             for row in self.line_rows
         ]
+        histograms = [self._hist_spec_from_row(row) for row in self.hist_rows]
         return figure_builder.FigureSpec(
             title=self.title_var.get(),
             x_axis_title=self.xtitle_var.get(),
             y_axis_title=self.ytitle_var.get(),
             lines=lines,
+            histograms=histograms,
             x_min=self._parse_limit(self.xmin_var.get()),
             x_max=self._parse_limit(self.xmax_var.get()),
             y_min=self._parse_limit(self.ymin_var.get()),
             y_max=self._parse_limit(self.ymax_var.get()),
+        )
+
+    @staticmethod
+    def _hist_spec_from_row(row: dict) -> figure_builder.HistogramSpec:
+        """Translate one histogram UI row into a HistogramSpec."""
+        legend = row["legend"].get()
+        if row["type"].get().startswith("Raw"):
+            try:
+                bins = int(row["bins"].get())
+            except (tk.TclError, ValueError):
+                bins = 0  # builder falls back to the style default
+            return figure_builder.HistogramSpec(
+                legend=legend,
+                values_header=row["values"].get(),
+                bins=bins,
+                density=bool(row["density"].get()),
+            )
+        return figure_builder.HistogramSpec(
+            legend=legend,
+            bin_centers_header=row["centers"].get(),
+            heights_header=row["heights"].get(),
         )
 
     @staticmethod

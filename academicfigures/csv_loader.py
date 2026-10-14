@@ -188,3 +188,29 @@ def clean_xy(data: CsvData, x_header: str, y_header: str) -> CleanSeries:
         ys.append(fy)
 
     return CleanSeries(x=xs, y=ys, skipped=skipped)
+
+
+@dataclass
+class CleanValues:
+    """A single numeric column cleaned for plotting, with a skip count."""
+
+    values: list[float]
+    skipped: int
+
+
+def clean_values(data: CsvData, header: str) -> CleanValues:
+    """Extract a single numeric column, dropping missing/non-numeric cells.
+
+    Used by histograms, which bin one column of raw observations (unlike lines,
+    which need aligned x/y pairs). `skipped` counts dropped cells.
+    """
+    raw = data.column(header)
+    values: list[float] = []
+    skipped = 0
+    for cell in raw:
+        fv = _to_float(cell)
+        if fv is None:
+            skipped += 1
+            continue
+        values.append(fv)
+    return CleanValues(values=values, skipped=skipped)
